@@ -1,10 +1,10 @@
 # -*- mode: python ; coding: utf-8 -*-
-# Build flow (bakes your tested config into the exe so it runs standalone):
-#   copy /y config.json config.baked.json
+# Build flow (bakes your tested config.json into the exe so it runs standalone):
 #   pip install -r requirements.txt
 #   pyinstaller pipipupu.spec
 # Output: dist/pipipupu.exe (single file, tesseract/ + baked config bundled)
 # NOTE: the exe will contain your API keys — don't share the file publicly.
+# config.json is gitignored, so a fresh clone builds with template defaults only.
 
 import os
 
@@ -12,9 +12,9 @@ _datas = [
     ('tesseract', 'tesseract'),
     ('config.example.json', '.'),
 ]
-# Bake the real tested config if the build step created it
-if os.path.exists('config.baked.json'):
-    _datas.append(('config.baked.json', '.'))
+# Bake the real tested config when building where it exists
+if os.path.exists('config.json'):
+    _datas.append(('config.json', '.'))
 
 a = Analysis(
     ['pipipupu.py'],

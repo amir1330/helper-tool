@@ -89,14 +89,14 @@ def load_config() -> dict:
                 _deep_merge(defaults, json.load(f))
         except Exception as e:
             print(f"[WARN] config.json load failed: {e}")
-    # Layer 1: baked config compiled into the exe.
-    # Build flow: copy your tested config.json -> config.baked.json before pyinstaller,
-    # so the exe carries your keys/models/prompts and runs anywhere with no external files.
-    # Falls back to config.example.json (template defaults) when no baked file exists.
-    for _baked_name in ("config.baked.json", "config.example.json"):
+    # Layer 1: config data compiled into the exe.
+    # The spec bundles your tested config.json at build time, so the exe
+    # carries your keys/models/prompts and runs anywhere with no external files.
+    # Falls back to config.example.json (template defaults) on fresh clones.
+    for _baked_name in ("config.baked.json", "config.json", "config.example.json"):
         _baked = _load_json_file(os.path.join(_bundle_dir(), _baked_name))
         if _baked:
-            if _baked_name == "config.baked.json":
+            if _baked_name != "config.example.json" and getattr(sys, 'frozen', False):
                 print("[INFO] using baked config (compiled in).")
             _deep_merge(defaults, _baked)
             break

@@ -8,7 +8,6 @@ dist/
 # Environment secrets
 .env
 config.json
-config.baked.json
 
 # Local venv
 .venv/
