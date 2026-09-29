@@ -40,5 +40,10 @@
     "x": null,
     "y": null,
     "margin": 10
+  },
+  "network": {
+    "proxy": "",
+    "timeout": 30,
+    "try_direct_first": true
   }
 }

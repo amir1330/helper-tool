@@ -47,6 +47,7 @@ def load_config() -> dict:
         "ocr": {"langs": "eng+rus", "psm": 3},
         "window": {"position": "top-right", "opacity": 0.55, "width": 200, "height": 50,
                    "x": None, "y": None, "margin": 10},
+        "network": {"proxy": "", "timeout": 30, "try_direct_first": True},
     }
     cfg_path = os.path.join(os.path.dirname(__file__), "config.json")
     if os.path.exists(cfg_path):
@@ -78,6 +79,11 @@ def load_config() -> dict:
         defaults["claude"]["api_keys"] = [*cur, *extra]
     if os.environ.get("PROVIDER"):
         defaults["provider"] = os.environ["PROVIDER"].lower()
+    # proxy: config network.proxy, or standard env vars
+    env_proxy = (os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY")
+                 or os.environ.get("ALL_PROXY") or os.environ.get("PROXY") or "")
+    if env_proxy and not defaults["network"].get("proxy"):
+        defaults["network"]["proxy"] = env_proxy
     return defaults
 
 
@@ -113,6 +119,59 @@ def _should_try_next_key(status_code: int, body: str = "") -> bool:
             return True
         return True  # still try next key; cheap and safe
     return status_code in (401, 402, 403, 429, 500, 502, 503, 504)
+
+
+def _net_timeout() -> int:
+    try:
+        return int(CONFIG.get("network", {}).get("timeout", 30))
+    except Exception:
+        return 30
+
+
+def _net_proxy() -> str:
+    return (CONFIG.get("network", {}).get("proxy") or "").strip()
+
+
+def _is_blocked_error(exc: Exception) -> bool:
+    # Connection-level failures typical for public-wifi firewalls / captive portals
+    name = type(exc).__name__
+    msg = f"{name}: {exc}".lower()
+    keywords = ("connection", "connecttimeout", "readtimeout", "max retries",
+                "name resolution", "temporary failure", "network is unreachable",
+                "connection aborted", "connection reset", "proxy", "captive",
+                "ssl", "certificate", "handshake", "dns")
+    return any(k in msg for k in keywords)
+
+
+def _post_api(url: str, headers: dict, payload: dict):
+    """POST with direct-first, proxy-fallback. Returns response or raises last error."""
+    timeout = _net_timeout()
+    proxy = _net_proxy()
+    direct_first = CONFIG.get("network", {}).get("try_direct_first", True)
+    attempts = []
+    if proxy and not direct_first:
+        attempts = [("proxy", {"http": proxy, "https": proxy})]
+    elif proxy:
+        attempts = [("direct", None), ("proxy", {"http": proxy, "https": proxy})]
+    else:
+        attempts = [("direct", None)]
+    last_exc = None
+    for mode, proxies in attempts:
+        try:
+            if proxies:
+                print(f"API via {mode}: {proxy}")
+            return requests.post(url, headers=headers, json=payload,
+                                 timeout=timeout, proxies=proxies, trust_env=True)
+        except Exception as e:
+            last_exc = e
+            if _is_blocked_error(e):
+                print(f"API {mode} blocked ({e}). "
+                      + ("Trying proxy..." if mode == "direct" and proxy else
+                         "Hint: public wifi may block AI APIs — set network.proxy "
+                         "(e.g. http://127.0.0.1:1080) or use phone hotspot/VPN."))
+                continue
+            raise
+    raise last_exc
 
 
 CONFIG = load_config()
@@ -432,15 +491,14 @@ class MainWindow(QWidget):
         last_err = ""
         for i, key in enumerate(keys):
             try:
-                resp = requests.post(
+                resp = _post_api(
                     f"https://generativelanguage.googleapis.com/v1beta/models/{g['model']}:generateContent?key={key}",
-                    headers={"Content-Type": "application/json"},
-                    json={
+                    {"Content-Type": "application/json"},
+                    {
                         "contents": [{"parts": [{"text": prompt}]}],
                         "generationConfig": {"temperature": g.get("temperature", 1.0),
                                              "maxOutputTokens": g.get("max_output_tokens", 200)},
                     },
-                    timeout=30,
                 )
                 if resp.status_code == 200:
                     data = resp.json()
@@ -468,13 +526,13 @@ class MainWindow(QWidget):
         last_err = ""
         for i, key in enumerate(keys):
             try:
-                resp = requests.post(
+                resp = _post_api(
                     o.get("base_url", "https://api.openai.com/v1/chat/completions"),
-                    headers={
+                    {
                         "Authorization": f"Bearer {key}",
                         "Content-Type": "application/json",
                     },
-                    json={
+                    {
                         "model": o.get("model", MODEL_NAME),
                         "messages": [
                             {"role": "system", "content": SYSTEM_PROMPT},
@@ -482,7 +540,6 @@ class MainWindow(QWidget):
                         ],
                         "temperature": o.get("temperature", 1.0)
                     },
-                    timeout=30,
                 )
                 if resp.status_code == 200:
                     data = resp.json()
@@ -510,20 +567,19 @@ class MainWindow(QWidget):
         last_err = ""
         for i, key in enumerate(keys):
             try:
-                resp = requests.post(
+                resp = _post_api(
                     c.get("base_url", "https://api.anthropic.com/v1/messages"),
-                    headers={
+                    {
                         "x-api-key": key,
                         "anthropic-version": "2023-06-01",
                         "Content-Type": "application/json",
                     },
-                    json={
+                    {
                         "model": c.get("model", "claude-sonnet-4-20250514"),
                         "system": SYSTEM_PROMPT,
                         "messages": [{"role": "user", "content": prompt}],
                         "max_tokens": c.get("max_tokens", 200),
                     },
-                    timeout=30,
                 )
                 if resp.status_code == 200:
                     data = resp.json()
