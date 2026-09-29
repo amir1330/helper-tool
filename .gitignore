@@ -7,6 +7,10 @@ dist/
 
 # Environment secrets
 .env
+config.json
+
+# Local venv
+.venv/
 
 # Python
 __pycache__/

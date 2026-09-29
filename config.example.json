@@ -1,0 +1,44 @@
+{
+  "provider": "gemini",
+  "fallback_enabled": true,
+  "fallback_order": ["gemini", "openai", "claude"],
+  "gemini": {
+    "api_key": "PUT-YOUR-GEMINI-KEY-HERE",
+    "api_keys": ["KEY-2-OPTIONAL", "KEY-3-OPTIONAL"],
+    "model": "gemini-2.5-flash",
+    "temperature": 1.0,
+    "max_output_tokens": 200
+  },
+  "openai": {
+    "api_key": "",
+    "api_keys": [],
+    "model": "gpt-5-mini-2025-08-07",
+    "base_url": "https://api.openai.com/v1/chat/completions",
+    "temperature": 1.0
+  },
+  "claude": {
+    "api_key": "",
+    "api_keys": [],
+    "model": "claude-sonnet-4-20250514",
+    "base_url": "https://api.anthropic.com/v1/messages",
+    "max_tokens": 200
+  },
+  "prompt": {
+    "prefix": "Only letters of answer, no explanation. Keep it very short. ",
+    "style": "Respond VERY briefly. Max 2 sentences.",
+    "system": "You are a concise, helpful assistant."
+  },
+  "ocr": {
+    "langs": "eng+rus",
+    "psm": 3
+  },
+  "window": {
+    "position": "top-right",
+    "opacity": 0.55,
+    "width": 200,
+    "height": 50,
+    "x": null,
+    "y": null,
+    "margin": 10
+  }
+}

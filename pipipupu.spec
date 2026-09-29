@@ -1,11 +1,15 @@
 # -*- mode: python ; coding: utf-8 -*-
-
+# Build: pip install -r requirements.txt && pyinstaller pipipupu.spec
+# Output: dist/pipipupu.exe (single file, tesseract/ + defaults bundled)
 
 a = Analysis(
     ['pipipupu.py'],
     pathex=[],
     binaries=[],
-    datas=[('tesseract', 'tesseract')],
+    datas=[
+        ('tesseract', 'tesseract'),
+        ('config.example.json', '.'),
+    ],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

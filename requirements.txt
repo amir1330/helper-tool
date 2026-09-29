@@ -1,4 +1,4 @@
-python-wayland>=0.5.0
+PyQt6>=6.6.0
 Pillow>=10.0.0
 requests>=2.31.0
 python-dotenv>=1.0.0
@@ -6,4 +6,4 @@ pynput>=1.7.6
 pytesseract>=0.3.10
 pyperclip>=1.8.2
 mss>=9.0.1
-evdev>=1.6.1
+pyinstaller>=6.0.0
