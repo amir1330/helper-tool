@@ -13,6 +13,13 @@ import threading
 import requests
 from dotenv import load_dotenv
 load_dotenv()
+# In frozen exe, CWD != exe dir — also load .env placed next to the exe
+try:
+    _exe_env = os.path.join(os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(__file__)), ".env")
+    if os.path.exists(_exe_env):
+        load_dotenv(_exe_env, override=False)
+except Exception:
+    pass
 from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtGui import QGuiApplication
@@ -29,6 +36,32 @@ def _deep_merge(base: dict, override: dict) -> dict:
         else:
             base[k] = v
     return base
+
+
+def _app_base_dir() -> str:
+    """Dir of script in dev, dir of exe when frozen."""
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def _bundle_dir() -> str:
+    """Dir where bundled data lives (_MEIPASS when frozen, script dir in dev)."""
+    if getattr(sys, 'frozen', False):
+        return getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def _load_json_file(path: str) -> dict | None:
+    try:
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    return data
+    except Exception as e:
+        print(f"[WARN] config load failed ({path}): {e}")
+    return None
 
 
 def load_config() -> dict:
@@ -55,7 +88,27 @@ def load_config() -> dict:
             with open(cfg_path, "r", encoding="utf-8") as f:
                 _deep_merge(defaults, json.load(f))
         except Exception as e:
-            print(f"⚠️ config.json load failed: {e}")
+            print(f"[WARN] config.json load failed: {e}")
+    # Layer 1: baked config compiled into the exe.
+    # Build flow: copy your tested config.json -> config.baked.json before pyinstaller,
+    # so the exe carries your keys/models/prompts and runs anywhere with no external files.
+    # Falls back to config.example.json (template defaults) when no baked file exists.
+    for _baked_name in ("config.baked.json", "config.example.json"):
+        _baked = _load_json_file(os.path.join(_bundle_dir(), _baked_name))
+        if _baked:
+            if _baked_name == "config.baked.json":
+                print("[INFO] using baked config (compiled in).")
+            _deep_merge(defaults, _baked)
+            break
+    # Layer 2: user config next to the exe (frozen) or script (dev). Wins over baked.
+    for cfg_path in (os.path.join(_app_base_dir(), "config.json"),
+                     os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")):
+        override = _load_json_file(cfg_path)
+        if override:
+            _deep_merge(defaults, override)
+            break
+    else:
+        print("[INFO] no config.json found, using baked defaults + env.")
     # env overrides (keep .env working)
     if os.environ.get("GEMINI_API_KEY"):
         defaults["gemini"]["api_key"] = os.environ["GEMINI_API_KEY"]
@@ -88,7 +141,8 @@ def load_config() -> dict:
 
 
 def get_api_keys(section: dict) -> list:
-    """Collect api keys in order: api_key (str or list) + api_keys list. Dedup, skip empties."""
+    """Collect api keys in order: api_key (str or list) + api_keys list. Dedup, skip empties/placeholders."""
+    placeholders = ("PUT-YOUR", "KEY-2-OPTIONAL", "KEY-3-OPTIONAL", "KEY-1", "KEY-2", "KEY-3", "...")
     keys: list = []
     single = section.get("api_key", "")
     if isinstance(single, list):
@@ -103,9 +157,12 @@ def get_api_keys(section: dict) -> list:
     seen, out = set(), []
     for k in keys:
         k = k.strip() if isinstance(k, str) else k
-        if k and k not in seen:
-            seen.add(k)
-            out.append(k)
+        if not k or k in seen:
+            continue
+        if any(p in k for p in placeholders):
+            continue
+        seen.add(k)
+        out.append(k)
     return out
 
 
@@ -240,7 +297,7 @@ class InvisibleOCR:
                         print(f"Tesseract found at: {path}")
                     break
             else:
-                print("⚠️ Tesseract not found! Make sure it's bundled or installed.")
+                print("[WARN] Tesseract not found! Make sure it's bundled or installed.")
                 sys.exit(1)
 
     def _take_screenshot(self):

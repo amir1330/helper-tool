@@ -54,12 +54,14 @@ A small floating window (`pipi pupu`) sends clipboard text to an LLM and shows t
 Prereqs: Python 3.10+, venv with `pip install -r requirements.txt` (includes `pyinstaller`), `config.json` filled in.
 
 ```bat
+Copy-Item config.json config.baked.json -Force
 .venv\Scripts\activate
 pyinstaller pipipupu.spec
 ```
 
 - Output: `dist\pipipupu.exe` (single file, windowed — no console).
-- The spec bundles `tesseract/` (exe + DLLs + `tessdata/eng+rus/osd`) and `config.example.json`.
-- First run: place `config.json` next to the exe (copy from `config.example.json` and fill keys), or set env vars. Without `config.json` the exe uses built-in defaults and env vars.
+- The spec bundles `tesseract/` (exe + DLLs + `tessdata/eng+rus/osd`) and your baked config.
+- Flow: fill `config.json` → test with `python pipipupu.py` → `copy /y config.json config.baked.json` → build. Whatever is in your config at build time (keys, models, prompts, window, proxy) is baked in, so the exe runs anywhere with no external files. A `config.json`/`.env` placed next to the exe still overrides baked values if keys ever change.
+- NOTE: the exe contains your API keys — don't share it publicly.
 - Rebuild after any `pipipupu.py` change: run `pyinstaller pipipupu.spec` again. If the build behaves oddly, wipe caches first: `rmdir /s /q build dist` then rebuild.
 - Size note: Qt + Tesseract DLLs make the exe large (~100–150 MB) — normal.
